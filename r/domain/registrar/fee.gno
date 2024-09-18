@@ -9,6 +9,7 @@ type feeInfo struct {
 	RegisterBaseFee     int64
 	RenewalFee          int64
 	RegisterAdditionFee int64
+	BidJoinFee          int64
 }
 
 func GetRegisterFee(dName string) int64 {

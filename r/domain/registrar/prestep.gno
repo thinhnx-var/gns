@@ -30,9 +30,10 @@ func init() {
 	adminVar = "g1p3ylc5w42lrt5345eh7h5l9gcd7qpeyvcl5qjx" //@varmeta-sponsorkey
 	// ugnot
 	fee = feeInfo{
-		RegisterBaseFee:     10000,
+		RegisterBaseFee:     100,
 		RenewalFee:          100,
 		RegisterAdditionFee: 0,
+		BidJoinFee:          100,
 	}
 	superBanker = std.GetBanker(std.BankerTypeRealmSend)
 	bankerUser = std.GetBanker(std.BankerTypeOrigSend)

@@ -19,7 +19,8 @@ func nativeProcess() {
 	bankerContract := std.CurrentRealm().Addr()
 	ugnotCoin := std.NewCoin("ugnot", fee.RegisterBaseFee)
 	coinsToTransfer := std.NewCoins(ugnotCoin)
-	coins := checkCoin()
+	caller := std.GetOrigCaller()
+	coins := checkCoin(caller)
 	ufmt.Println("check: ", coins)
 	ufmt.Println("send from contract ", bankerContract.String(), " to admin ", admin.String(), " amount: ", ugnotCoin)
 	bankerUser.SendCoins(bankerContract, admin, coinsToTransfer)
@@ -45,7 +46,7 @@ func assertIsAdmin() {
 }
 
 // checking for availble coins
-func checkCoin() std.Coins {
-	caller := std.GetOrigCaller()
-	return bankerUser.GetCoins(caller)
+func checkCoin(from std.Address) std.Coins {
+	// caller := std.GetOrigCaller()
+	return bankerUser.GetCoins(from)
 }

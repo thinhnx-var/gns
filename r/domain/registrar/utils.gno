@@ -9,8 +9,10 @@ import (
 )
 
 var (
-	defaultExpireTime             = time.Hour // 30 days
-	reName                        = regexp.MustCompile(`^[a-zA-Z0-9]{1,124}\.gno$`)
+	defaultCommitHashTime  = time.Second * 30
+	defaultCommitPriceTime = time.Second * 10
+	defaultExpireTime      = time.Hour // 30 days
+	reName                 = regexp.MustCompile(`^[a-zA-Z0-9]{1,124}\.gno$`)
 )
 
 // check for registering process
@@ -21,6 +23,7 @@ func isValidDomain(d string) bool {
 func GetExpirationDate(dName string) time.Time {
 	return rootRegistry.GetExpirationDate(dName)
 }
+
 // for now, this function only let admin set
 func SetExpirationDate(dName string, expDate time.Time) bool {
 	assertIsAdmin()

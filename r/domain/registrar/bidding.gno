@@ -2,6 +2,7 @@ package registrar
 
 import (
 	"std"
+	"strconv"
 	"time"
 
 	"gno.land/p/demo/ufmt"
@@ -19,7 +20,7 @@ type bidRecord struct {
 	IsOpen     bool
 }
 
-var BidRec *avl.Tree // bidRecord -> domainName
+var BidRec *avl.Tree // bidRecord <- []bidRec
 
 // pending logic
 func startBiddingSession(domainName string) (result string) {
@@ -44,78 +45,96 @@ func Render(path string) string {
 	---> admin end bidding auction
 	-> 2.3.1: cooldown phase -> waiting for winner -> 2nd winner
 	-> 2.4: re-transfer coin from admin to user who not win the bid
-the flow is: user want to register new domain name -> start new bidding session -> got the bidding session id
-if other want to register to the same domain name -> bidding into this session, if not return to new state
-when the session ends, need to have 2nd phase called commit -> commit their price and secret to compute the hash
--> compare the hash as in record -> accept the hash -> accept the price
+		the flow is: user want to register new domain name -> start new bidding session -> got the bidding session id
+		if other want to register to the same domain name -> bidding into this session, if not return to new state
+		when the session ends, need to have 2nd phase called commit -> commit their price and secret to compute the hash
+		-> compare the hash as in record -> accept the hash -> accept the price
+		*** temp approach: everytime user commit, user open a bid session if not existed, if existed -> check if this session is ended.
 */
-// temp approach: everytime user commit, user open a bid session if not existed, if existed -> check if this session is ended.
 
 // commit the domain name and computed hash string
 func CommitHash(domainName, hashString string) string {
 	caller := std.GetOrigCaller()
+	ufmt.Println("caller: ", caller.String())
 	now := time.Now()
-	endTime := now.Add(defaultExpireTime)
+	endTime := now.Add(defaultCommitHashTime)
 
 	// update the bid record
 	data, existed := BidRec.Get(domainName)
 
 	// if not existed -> create new record
 	if !existed {
-		bidRec := bidRecord{
+		var bidRec bidRecord
+		bidRec = bidRecord{
 			DomainName: domainName,
 			Bidder:     caller,
+			HashString: hashString,
 			StartTime:  now,
 			EndTime:    endTime,
 			IsOpen:     true,
 		}
 		bidRecList := []bidRecord{bidRec}
-		updated := BidRec.Set(domainName, bidRecList)
-		if !updated {
-			panic("can not updated the record")
-		}
+		BidRec.Set(domainName, bidRecList)
+
+		// charge fee
+		chargeFee(fee.BidJoinFee, caller)
+		return "ok"
 	}
 	// if existed
+	// TODO: Check if commit more than 1 time
 	bidRecList := data.([]bidRecord)
 	startTime := bidRecList[0].StartTime
 	bidRec := bidRecord{
 		DomainName: domainName,
 		HashString: hashString,
-		Bidder: caller,
-		StartTime: startTime,
-		EndTime: endTime,
-		IsOpen: true,
+		Bidder:     caller,
+		StartTime:  startTime,
+		EndTime:    endTime,
+		IsOpen:     true,
 	}
 	bidRecList = append(bidRecList, bidRec)
 	// Save record
-	ok := BidRec.Set(domainName, bidRecList)
-	if !ok {
-		panic("can not complete bidding")
-	}
+	BidRec.Set(domainName, bidRecList)
+	// charge fee
+	chargeFee(fee.BidJoinFee, caller)
 	return "commit hash done, result recorded"
 }
 
 // commit price and secret to reveal auction session
-func CommitPrice(price int, secret string, domainName string) bool {
+func CommitPrice(price int, secret string, domainName string) bidStatus {
 	// compute the hash string, compare to saved hash string in record
-	computedHashString := "demo"
+	bStt := bidStatus{}
+	// joinedString = (secret || price)
+	tempJoinString := secret + strconv.Itoa(price)
+	ufmt.Println("joined string: ", tempJoinString)
+	computedHashString := Get256String(tempJoinString)
+	ufmt.Println("computed hash: ", computedHashString)
 	caller := std.GetOrigCaller()
 	data, existed := BidRec.Get(domainName)
 	if !existed {
-		panic("domain name is invalid")
+		panic("CommitPrice: domain name is invalid")
 	}
 	bidRecList := data.([]bidRecord)
 	for _, bidRec := range bidRecList {
+		if bidRec.Bidder == caller && bidRec.HashString != computedHashString {
+			bStt.CurrentStatus = AppendBiddingSession
+			bStt.ActionCode = ActionFailed
+			return bStt
+		}
 		// found it, update the price
 		if bidRec.Bidder == caller && bidRec.HashString == computedHashString {
 			ok := savePrice(price, domainName, bidRec)
 			if !ok {
-				panic("can not save price")
+				panic("CommitPrice: can not save price")
 			}
-			return true
+			bStt.CurrentStatus = AppendBiddingSession
+			bStt.ActionCode = ClaimPhase
+			return bStt
 		}
 	}
-	return false
+	bStt.CurrentStatus = StatusFailed
+	bStt.ActionCode = ActionFailed
+	return bStt
 }
 
 func savePrice(price int, domainName string, rec bidRecord) bool {
@@ -123,14 +142,14 @@ func savePrice(price int, domainName string, rec bidRecord) bool {
 	bidRecFinal := []bidRecord{rec}
 	ok := BidRec.Set(domainName, bidRecFinal)
 	if !ok {
-		panic("can not update record")
+		panic("SavePrice: can not update record")
 	}
 	return true
 }
 
 // find the highest bid in session - incase everyone commited price
 func findTheWinner(domainName string) bidRecord {
-	winnerBid := bidRecord{}
+	var winnerBid bidRecord
 	data, existed := BidRec.Get(domainName)
 	if !existed {
 		panic("invalid domain name")
@@ -162,8 +181,7 @@ func registerForWinner(domainName string, winnerRec bidRecord) bool {
 	return false
 }
 
-
-// everyone can call EndBid
+// everyone can call EndBid()
 // this EndBid checks endTime -> end the auction
 func EndBid(domainName string) error {
 	now := time.Now()
@@ -173,6 +191,9 @@ func EndBid(domainName string) error {
 	}
 	bidRecList := data.([]bidRecord)
 	firstBidRec := bidRecList[0]
+	timeNowDebug := now.Format(time.RFC3339)
+	endTimeDebug := firstBidRec.EndTime.Format(time.RFC3339)
+	ufmt.Println("now: ", timeNowDebug, "endTime: ", endTimeDebug)
 	if now.Before(firstBidRec.EndTime) {
 		return ufmt.Errorf("endbid: this session can not end before the end time")
 	}
@@ -184,60 +205,61 @@ func EndBid(domainName string) error {
 	if !ok {
 		return ufmt.Errorf("endbid: can not change bid record state")
 	}
+	// need more conditions for findTheWinner()
+	findTheWinner(domainName)
 	return nil
 }
 
 // register new domain with bidding process inside - if message is commit hash -> dapp need to call commit hash
-func RegisterDomain(domainName string) error {
+func RegisterDomain(domainName string) bidStatus {
 	reqInfo := RequestInfo{
 		WantedDomain: domainName,
-		Caller: std.PrevRealm().Addr(),
-		Mode: "native",
+		Caller:       std.PrevRealm().Addr(),
+		Mode:         "native",
 	}
+
+	// bidStatus
 	result := checkRegisterState(reqInfo)
 	// if checkState get the message of which phase this domain name belongs to, then return the status
-	if !result.Success && result.Message != "" {
-		return ufmt.Errorf(result.Message)
-	}
-	// concern feeProcess somewhere we need it, for now I put it here to remind
-	// fee process as normal - will charge amount of baseFee
-	feeProcess(reqInfo)
-	return nil
+	return result
 }
 
-func checkRegisterState(req RequestInfo) ExecuteResult {
+func checkRegisterState(req RequestInfo) bidStatus {
+	var bStt bidStatus
 	// check if domain name is regex valid
-	var execRes ExecuteResult
 	if !isValidDomain(req.WantedDomain) {
-		execRes.Success = false
-		execRes.ResultDetails = ErrInvalidDomainName
-		return execRes
+		panic("invalid domain name")
 	}
 	// check if dName is registered
 	if AlreadyRegistered(req.WantedDomain) {
-		execRes.Success = false
-		execRes.ResultDetails = ErrAlreadyRegistered
-		return execRes
+		panic("domain name already registered")
 	}
 	// changelogs v2: we are using sealed bidding now
 	// check if a bidding session is openning -> append new commit hash into record list
 	// both existed or not we open new bidding session
 	// for now we return a signal for dapps / service to know what to do next
-	isOpen, _ := checkBiddingState(req.WantedDomain)
-	if isOpen {
-		// return signal for dapps
-		execRes.Success = false
-		execRes.Message = "please commit hash"
-		return execRes
+	isExisted, isOpen := checkBiddingState(req.WantedDomain)
+	if isExisted && isOpen {
+		// return commit hash signal for dapps
+		bStt.CurrentStatus = AppendBiddingSession
+		bStt.ActionCode = CommitHashPhase
+		return bStt
+	}
+
+	// create new session
+	if !isExisted {
+		bStt.CurrentStatus = NewBiddingSession
+		bStt.ActionCode = CommitHashPhase
+		return bStt
 	}
 
 	// not found in register repository but also not found in Bidding Record -> panic("error somewhere :D")
 	panic(ufmt.Errorf("should not happend"))
-	return execRes
+	return bStt
 }
 
 // open a bidding session
-func OpenBiddingSession(domainName string, dur time.Duration) string {
+func openBiddingSession(domainName string, dur time.Duration) string {
 	now := time.Now()
 	bidRec := bidRecord{
 		DomainName: domainName,
@@ -256,6 +278,7 @@ func checkBiddingState(dName string) (isExisted bool, isOpen bool) {
 	if !existed {
 		isExisted = false
 		isOpen = false
+		return
 	}
 	isExisted = true
 	recList := data.([]bidRecord)
@@ -265,4 +288,50 @@ func checkBiddingState(dName string) (isExisted bool, isOpen bool) {
 		isOpen = false
 	}
 	return isExisted, isOpen
+}
+
+// get all the record
+func GetRecord(dName string) (priceList []int, hashList []string) {
+	data, existed := BidRec.Get(dName)
+	if !existed {
+		panic("should not")
+	}
+	rList := data.([]bidRecord)
+	for _, r := range rList {
+		priceList = append(priceList, r.Price)
+		hashList = append(hashList, r.HashString)
+	}
+	return priceList, hashList
+}
+
+// chargeFee will charge amount - send from this contract to admin
+func chargeFee(amount int64, from std.Address) {
+	bankerContract := std.CurrentRealm().Addr()
+	ugnotCoin := std.NewCoin("ugnot", amount)
+	coinsToTransfer := std.NewCoins(ugnotCoin)
+	coins := checkCoin(from)
+	ufmt.Println("check balances: ", coins)
+	ufmt.Println("send from contract ", bankerContract.String(), " to admin ", admin.String(), " amount: ", ugnotCoin)
+	bankerUser.SendCoins(bankerContract, admin, coinsToTransfer)
+}
+
+func Claim(domainName string) bool {
+	data, existed := BidRec.Get(domainName)
+	if !existed {
+		panic("claim: invalid domain name")
+	}
+	recList := data.([]bidRecord)
+	winnerAddr := recList[0].Bidder
+	requestInfo := RequestInfo{
+		WantedDomain: domainName,
+		Caller:       winnerAddr,
+		Mode:         "native",
+	}
+	result := executeRegister(requestInfo)
+	if !result.Success {
+		panic(result.ResultDetails.Error())
+	}
+	// register done. Now charge the fee
+	feeProcess(requestInfo)
+	return true
 }
