@@ -20,7 +20,10 @@ type bidRecord struct {
 	IsOpen     bool
 }
 
-var BidRec *avl.Tree // bidRecord <- []bidRec
+var (
+	BidRec    *avl.Tree // bidRecord <- []bidRec
+	winnerRec *avl.Tree
+)
 
 // pending logic
 func startBiddingSession(domainName string) (result string) {
@@ -53,7 +56,8 @@ func Render(path string) string {
 */
 
 // commit the domain name and computed hash string
-func CommitHash(domainName, hashString string) string {
+func CommitHash(domainName, hashString string) bidStatus {
+	bStt := bidStatus{}
 	caller := std.GetOrigCaller()
 	ufmt.Println("caller: ", caller.String())
 	now := time.Now()
@@ -78,7 +82,9 @@ func CommitHash(domainName, hashString string) string {
 
 		// charge fee
 		chargeFee(fee.BidJoinFee, caller)
-		return "ok"
+		bStt.CurrentStatus = NewBiddingSession
+		bStt.ActionCode = CommitPricePhase
+		return bStt
 	}
 	// if existed
 	// TODO: Check if commit more than 1 time
@@ -97,7 +103,9 @@ func CommitHash(domainName, hashString string) string {
 	BidRec.Set(domainName, bidRecList)
 	// charge fee
 	chargeFee(fee.BidJoinFee, caller)
-	return "commit hash done, result recorded"
+	bStt.CurrentStatus = AppendBiddingSession
+	bStt.ActionCode = CommitPricePhase
+	return bStt
 }
 
 // commit price and secret to reveal auction session
@@ -105,6 +113,7 @@ func CommitPrice(price int, secret string, domainName string) bidStatus {
 	// compute the hash string, compare to saved hash string in record
 	bStt := bidStatus{}
 	// joinedString = (secret || price)
+	now := time.Now()
 	tempJoinString := secret + strconv.Itoa(price)
 	ufmt.Println("joined string: ", tempJoinString)
 	computedHashString := Get256String(tempJoinString)
@@ -115,21 +124,29 @@ func CommitPrice(price int, secret string, domainName string) bidStatus {
 		panic("CommitPrice: domain name is invalid")
 	}
 	bidRecList := data.([]bidRecord)
+	winnerRec.Set(domainName, bidRecList[0])
 	for _, bidRec := range bidRecList {
+		// case commit after end
+		if now.After(bidRec.EndTime) {
+			bStt.CurrentStatus = BiddingSessionClosed
+			bStt.ActionCode = 0
+			return bStt
+		}
 		if bidRec.Bidder == caller && bidRec.HashString != computedHashString {
 			bStt.CurrentStatus = AppendBiddingSession
 			bStt.ActionCode = ActionFailed
 			return bStt
 		}
-		// found it, update the price
+		// found it, update the winner price
 		if bidRec.Bidder == caller && bidRec.HashString == computedHashString {
-			ok := savePrice(price, domainName, bidRec)
-			if !ok {
-				panic("CommitPrice: can not save price")
+			data, _ := winnerRec.Get(domainName)
+			currentWinnerRec := data.(bidRecord)
+			if price > currentWinnerRec.Price && now.Before(currentWinnerRec.EndTime) {
+				currentWinnerRec.Price = price
+				winnerRec.Set(domainName, currentWinnerRec)
+				bStt.ActionCode = ClaimPhase
+				return bStt
 			}
-			bStt.CurrentStatus = AppendBiddingSession
-			bStt.ActionCode = ClaimPhase
-			return bStt
 		}
 	}
 	bStt.CurrentStatus = StatusFailed
@@ -137,15 +154,23 @@ func CommitPrice(price int, secret string, domainName string) bidStatus {
 	return bStt
 }
 
-func savePrice(price int, domainName string, rec bidRecord) bool {
-	rec.Price = price
-	bidRecFinal := []bidRecord{rec}
-	ok := BidRec.Set(domainName, bidRecFinal)
-	if !ok {
-		panic("SavePrice: can not update record")
+func GetCurrentWinner(domainName string) bidRecord {
+	data, existed := winnerRec.Get(domainName)
+	if !existed {
+		panic("no winner yet")
 	}
-	return true
+	return data.(bidRecord)
 }
+
+// func savePrice(price int, domainName string, rec bidRecord) bool {
+// 	rec.Price = price
+// 	bidRecFinal := []bidRecord{rec}
+// 	ok := BidRec.Set(domainName, bidRecFinal)
+// 	if !ok {
+// 		panic("SavePrice: can not update record")
+// 	}
+// 	return true
+// }
 
 // find the highest bid in session - incase everyone commited price
 func findTheWinner(domainName string) bidRecord {
@@ -316,15 +341,14 @@ func chargeFee(amount int64, from std.Address) {
 }
 
 func Claim(domainName string) bool {
-	data, existed := BidRec.Get(domainName)
+	data, existed := winnerRec.Get(domainName)
 	if !existed {
 		panic("claim: invalid domain name")
 	}
-	recList := data.([]bidRecord)
-	winnerAddr := recList[0].Bidder
+	rec := data.(bidRecord)
 	requestInfo := RequestInfo{
 		WantedDomain: domainName,
-		Caller:       winnerAddr,
+		Caller:       rec.Bidder,
 		Mode:         "native",
 	}
 	result := executeRegister(requestInfo)

@@ -23,6 +23,7 @@ var (
 func init() {
 	domainStorage = avl.NewTree()
 	BidRec = avl.NewTree()
+	winnerRec = avl.NewTree()
 	rootRegistry = domain.NewDomainRegistry("Varmeta", "vmt")
 
 	// fee init
