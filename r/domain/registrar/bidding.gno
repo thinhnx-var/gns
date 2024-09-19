@@ -89,7 +89,18 @@ func CommitHash(domainName, hashString string) bidStatus {
 	// if existed
 	// TODO: Check if commit more than 1 time
 	bidRecList := data.([]bidRecord)
+	ufmt.Println("now: ", time.Now().Format(time.RFC3339))
+	ufmt.Println("bidRec0: ", bidRecList[0].EndTime.Format(time.RFC3339))
 	startTime := bidRecList[0].StartTime
+	if now.After(bidRecList[0].EndTime) {
+		panic("can not commit hash anymore")
+	}
+	for _, bR := range bidRecList {
+		if bR.Bidder == caller {
+			panic("commit 1 time per user")
+		}
+	}
+
 	bidRec := bidRecord{
 		DomainName: domainName,
 		HashString: hashString,
@@ -111,7 +122,7 @@ func CommitHash(domainName, hashString string) bidStatus {
 // commit price and secret to reveal auction session
 func CommitPrice(price int, secret string, domainName string) bidStatus {
 	// compute the hash string, compare to saved hash string in record
-	bStt := bidStatus{}
+	var bStt bidStatus
 	// joinedString = (secret || price)
 	now := time.Now()
 	tempJoinString := secret + strconv.Itoa(price)
@@ -142,7 +153,10 @@ func CommitPrice(price int, secret string, domainName string) bidStatus {
 			data, _ := winnerRec.Get(domainName)
 			currentWinnerRec := data.(bidRecord)
 			if price > currentWinnerRec.Price && now.Before(currentWinnerRec.EndTime) {
+				ufmt.Println("found new winner, setting up")
 				currentWinnerRec.Price = price
+				currentWinnerRec.Bidder = bidRec.Bidder
+				currentWinnerRec.HashString = bidRec.HashString
 				winnerRec.Set(domainName, currentWinnerRec)
 				bStt.ActionCode = ClaimPhase
 				return bStt
@@ -345,7 +359,11 @@ func Claim(domainName string) bool {
 	if !existed {
 		panic("claim: invalid domain name")
 	}
+	caller := std.GetOrigCaller()
 	rec := data.(bidRecord)
+	if caller != rec.Bidder {
+		panic("only winner can claim")
+	}
 	requestInfo := RequestInfo{
 		WantedDomain: domainName,
 		Caller:       rec.Bidder,
