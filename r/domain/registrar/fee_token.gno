@@ -5,7 +5,7 @@ import (
 
 	"gno.land/p/demo/ufmt"
 	pusers "gno.land/p/demo/users"
-	"gno.land/r/demo/domain/vmt"
+	"gno.land/r/varmeta/demo1/domain/vmt"
 )
 
 // expected approved already from client -> transfer from caller to admin
