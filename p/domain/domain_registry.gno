@@ -5,7 +5,7 @@ import (
 	"time"
 
 	"gno.land/p/demo/avl"
-	"gno.land/p/varmeta/demo/v1/grc/grc721"
+	"gno.land/p/varmeta/demo/v3/grc/grc721"
 )
 
 // domainRegistry represents a registry for domain names with metadata

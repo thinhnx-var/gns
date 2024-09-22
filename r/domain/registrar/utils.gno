@@ -10,7 +10,7 @@ import (
 
 var (
 	defaultCommitHashTime  = time.Second * 60
-	defaultCommitPriceTime = time.Second * 10
+	defaultCommitPriceTime = time.Second * 60
 	defaultExpireTime      = time.Hour // 30 days
 	reName                 = regexp.MustCompile(`^[a-zA-Z0-9]{1,124}\.gno$`)
 )

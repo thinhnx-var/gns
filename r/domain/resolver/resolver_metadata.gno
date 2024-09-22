@@ -4,7 +4,7 @@ import (
 	"std"
 	"time"
 
-	"gno.land/p/varmeta/demo/v1/domain"
+	"gno.land/p/varmeta/demo/v3/domain"
 )
 
 // Metadata wrapper
