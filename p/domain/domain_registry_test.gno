@@ -7,7 +7,7 @@ import (
 
 	"gno.land/p/demo/testutils"
 	"gno.land/p/demo/urequire"
-	"gno.land/p/varmeta/demo/v34/grc/grc721"
+	"gno.land/p/varmeta/demo/v35/grc/grc721"
 )
 
 var (

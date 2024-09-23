@@ -1,4 +1,4 @@
-module gno.land/p/varmeta/demo/v34/grc/grc721
+module gno.land/p/varmeta/demo/v35/grc/grc721
 
 require (
 	gno.land/p/demo/avl v0.0.0-latest
