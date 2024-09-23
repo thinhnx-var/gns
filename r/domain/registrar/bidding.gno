@@ -44,7 +44,7 @@ func recordJoinedBid(domainName string) {
 	return
 }
 
-// find the joined bids
+// get the joined bids of an account
 func GetJoinedBid() []string {
 	caller := std.GetOrigCaller().String()
 	data, existed := joinedBid.Get(caller)
@@ -68,13 +68,10 @@ func GetCurrentStatus(domainName string) string {
 			return "hash"
 		}
 		ufmt.Println("run here")
-		return "undefined"
+		return "dName is invalid"
 	}
 	recList := data.([]bidRecord)
-	rec := recList[0]
-	// ufmt.Println("dubug time: ", rec.EndCommitTime.Format(time.RFC3339))
-	// ufmt.Println("dubug end price time: ", rec.EndPriceTime.Format(time.RFC3339))
-	// ufmt.Println("dubug time now: ", now.Format(time.RFC3339))
+	rec := recList[0] 
 
 	if now.Before(rec.EndCommitTime) {
 		return "waiting price"
@@ -120,8 +117,6 @@ func CommitHash(domainName, hashString string) bidStatus {
 	caller := std.GetOrigCaller()
 	ufmt.Println("caller: ", caller.String())
 	now := time.Now()
-	endCommitTime := now.Add(defaultCommitHashTime)
-	endPriceTime := endCommitTime.Add(defaultCommitPriceTime)
 
 	// update the bid record
 	data, existed := BidRec.Get(domainName)
@@ -129,6 +124,10 @@ func CommitHash(domainName, hashString string) bidStatus {
 	// if not existed -> create new record
 	if !existed {
 		var bidRec bidRecord
+		endCommitTime := now.Add(defaultCommitHashTime)
+		endPriceTime := endCommitTime.Add(defaultCommitPriceTime)
+		ufmt.Println("endCommitTime: ", endCommitTime.Format(time.RFC3339))
+		ufmt.Println("endPriceTime: ", endPriceTime.Format(time.RFC3339))
 		bidRec = bidRecord{
 			DomainName:    domainName,
 			Bidder:        caller,
@@ -151,7 +150,7 @@ func CommitHash(domainName, hashString string) bidStatus {
 	// TODO: Check if commit more than 1 time -> done
 	bidRecList := data.([]bidRecord)
 	startTime := bidRecList[0].StartTime
-	if now.After(bidRecList[0].EndPriceTime) {
+	if now.After(bidRecList[0].EndCommitTime) {
 		panic("can not commit hash anymore")
 	}
 	for _, bR := range bidRecList {
@@ -160,13 +159,15 @@ func CommitHash(domainName, hashString string) bidStatus {
 		}
 	}
 
+	oldEndCommitTime := bidRecList[0].EndCommitTime
+	oldEndPriceTime := bidRecList[0].EndPriceTime
 	bidRec := bidRecord{
 		DomainName:    domainName,
 		HashString:    hashString,
 		Bidder:        caller,
 		StartTime:     startTime,
-		EndCommitTime: endCommitTime,
-		EndPriceTime:  endPriceTime,
+		EndCommitTime: oldEndCommitTime,
+		EndPriceTime:  oldEndPriceTime,
 		IsOpen:        true,
 	}
 	bidRecList = append(bidRecList, bidRec)
@@ -179,6 +180,7 @@ func CommitHash(domainName, hashString string) bidStatus {
 	return bStt
 }
 
+// for now we dont use panic because this will cause the permanent time.Now() stuck. IDK why // XXX fix me
 // commit price and secret to reveal auction session
 func CommitPrice(price int, secret string, domainName string) bidStatus {
 	var bStt bidStatus
@@ -194,14 +196,22 @@ func CommitPrice(price int, secret string, domainName string) bidStatus {
 	}
 	bidRecList := data.([]bidRecord)
 	winnerRec.Set(domainName, bidRecList[0])
-	
+
+	ufmt.Println("time now: ", now.Format(time.RFC3339))
+	ufmt.Println("end commit phase time: ", bidRecList[0].EndCommitTime.Format(time.RFC3339))
 	// case commit after end - consider panic or not
 	if now.After(bidRecList[0].EndPriceTime) {
-		panic("commit price phase is ended")
+		ufmt.Println("commit price phase is ended")
+		bStt.ActionCode = 0
+		bStt.CurrentStatus = 0
+		return bStt
 	}
 	// case commit when price phase not started
-	if now.Before(bidRecList[0].EndCommitTime) {
-		panic("commit price phase is not started yet")
+	if time.Now().Before(bidRecList[0].EndCommitTime) {
+		ufmt.Println("commit price phase is not started yet")
+		bStt.ActionCode = 0
+		bStt.CurrentStatus = 0
+		return bStt
 	}
 
 	// search for the corresponding hash
@@ -226,7 +236,7 @@ func CommitPrice(price int, secret string, domainName string) bidStatus {
 		}
 	}
 	// if not match above case, then panic
-	panic("invalid hash string")
+	panic("commit failed")
 }
 
 func GetCurrentWinner(domainName string) bidRecord {
@@ -346,20 +356,20 @@ func checkRegisterState(req RequestInfo) bidStatus {
 	return bStt
 }
 
-// open a bidding session
-func openBiddingSession(domainName string, dur time.Duration) string {
-	now := time.Now()
-	bidRec := bidRecord{
-		DomainName: domainName,
-		StartTime:  now,
-	}
-	bidRecList := []bidRecord{bidRec}
-	ok := BidRec.Set(domainName, bidRecList)
-	if !ok {
-		panic("can not open bidding session")
-	}
-	return "created bidding session"
-}
+// // open a bidding session
+// func openBiddingSession(domainName string, dur time.Duration) string {
+// 	now := time.Now()
+// 	bidRec := bidRecord{
+// 		DomainName: domainName,
+// 		StartTime:  now,
+// 	}
+// 	bidRecList := []bidRecord{bidRec}
+// 	ok := BidRec.Set(domainName, bidRecList)
+// 	if !ok {
+// 		panic("can not open bidding session")
+// 	}
+// 	return "created bidding session"
+// }
 
 func checkBiddingState(dName string) (isExisted bool, isOpen bool) {
 	data, existed := BidRec.Get(dName)
@@ -379,17 +389,12 @@ func checkBiddingState(dName string) (isExisted bool, isOpen bool) {
 }
 
 // get all the price list that joined the bid for displaying in dapp
-func GetRecords(dName string) (priceList []int, hashList []string) {
+func GetRecords(dName string) []bidRecord {
 	data, existed := BidRec.Get(dName)
 	if !existed {
 		panic("should not")
 	}
-	rList := data.([]bidRecord)
-	for _, r := range rList {
-		priceList = append(priceList, r.Price)
-		hashList = append(hashList, r.HashString)
-	}
-	return priceList, hashList
+	return data.([]bidRecord)
 }
 
 // chargeFee will charge amount - send from this contract to admin
@@ -424,7 +429,7 @@ func Claim(domainName string) bool {
 		panic(result.ResultDetails.Error())
 	}
 	// register done. Now charge the fee
-	chargeFee(int64(rec.Price), caller)	
+	chargeFee(100, caller)
 	feeProcess(requestInfo)
 	return true
 }
