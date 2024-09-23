@@ -29,3 +29,11 @@ func SetExpirationDate(dName string, expDate time.Time) bool {
 	assertIsAdmin()
 	return rootRegistry.SetExpirationDate(dName, expDate)
 }
+
+func SetCommitPhaseTime(duration int) {
+	defaultCommitHashTime = time.Duration(duration) * time.Second
+}
+
+func SetCommitPriceTime(duration int) {
+	defaultCommitPriceTime = time.Duration(duration) * time.Second
+}

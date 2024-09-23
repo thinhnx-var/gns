@@ -45,17 +45,29 @@ func recordJoinedBid(domainName string) {
 }
 
 // get the joined bids of an account
-func GetJoinedBid() []string {
+// want to return both name and status
+func GetJoinedBid() []singleStatus {
 	caller := std.GetOrigCaller().String()
 	data, existed := joinedBid.Get(caller)
 	if !existed {
-		return []string{}
+		return []singleStatus{}
 	}
 	list := data.([]string)
-	return list
+	listStatus := []singleStatus{}
+	for _, dName := range list {
+		stt := GetCurrentStatus(dName)
+		singleStt := singleStatus{
+			DomainName: dName,
+			Status:     stt,
+		}
+		listStatus = append(listStatus, singleStt)
+	}
+	return listStatus
 }
 
 // get the next state of bidding session
+// XXX note commit price status + if time is expired and not commited yet
+// status clear
 func GetCurrentStatus(domainName string) string {
 	// if there is record in joinedBid -> user joined
 	// check for tine.Now() and startTime
@@ -64,18 +76,25 @@ func GetCurrentStatus(domainName string) string {
 	// find the record
 	data, existed := BidRec.Get(domainName)
 	if !existed {
+		// no record in bidRec yet -> not commited -> check if user started auction or not - if yes: new auction
 		if _, existedInRegister := joinedBid.Get(caller.String()); existedInRegister {
-			return "hash"
+			return "new auction"
 		}
-		ufmt.Println("run here")
-		return "dName is invalid"
+		return "invalid"
 	}
+
+	// commited yet
 	recList := data.([]bidRecord)
-	rec := recList[0] 
+	rec := recList[0]
 
 	if now.Before(rec.EndCommitTime) {
-		return "waiting price"
+		if rec.HashString != "" {
+			return "commited hash"
+		} else {
+			return "hash"
+		}
 	}
+
 	if now.Before(rec.EndPriceTime) && now.After(rec.EndCommitTime) {
 		return "price"
 	}

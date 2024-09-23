@@ -31,3 +31,8 @@ var (
 	CommitPricePhase actionCode = 2
 	ClaimPhase       actionCode = 3
 )
+
+type singleStatus struct {
+	DomainName string
+	Status     string
+}

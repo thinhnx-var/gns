@@ -5,9 +5,9 @@ import (
 	"testing"
 	"time"
 
-	"gno.land/p/varmeta/demo/v3/grc/grc721"
 	"gno.land/p/demo/testutils"
 	"gno.land/p/demo/urequire"
+	"gno.land/p/varmeta/demo/v34/grc/grc721"
 )
 
 var (

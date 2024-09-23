@@ -12,7 +12,7 @@ import (
 	"std"
 	"time"
 
-	"gno.land/p/varmeta/demo/v3/domain"
+	"gno.land/p/varmeta/demo/v34/domain"
 )
 
 // XXX: consider using panic instead of return string or errors
@@ -47,13 +47,11 @@ func executeRegister(req RequestInfo) ExecuteResult {
 	if AlreadyRegistered(req.WantedDomain) {
 		execRes.Success = false
 		execRes.ResultDetails = ErrAlreadyRegistered
-		return execRes                                                                                                                                                                                                                                                                                                                                                                                                 
+		return execRes
 	}
 
 	// execute register domain - mint the nft
 	// changelogs v2: we are using sealed bidding now
-
-
 
 	caller := req.Caller
 	ttl := defaultExpireTime
