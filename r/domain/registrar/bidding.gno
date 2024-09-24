@@ -46,8 +46,7 @@ func recordJoinedBid(domainName string) {
 
 // get the joined bids of an account
 // want to return both name and status
-func GetJoinedBid() []singleStatus {
-	caller := std.GetOrigCaller().String()
+func GetJoinedBid(caller string) []singleStatus {
 	data, existed := joinedBid.Get(caller)
 	if !existed {
 		return []singleStatus{}
@@ -55,7 +54,7 @@ func GetJoinedBid() []singleStatus {
 	list := data.([]string)
 	listStatus := []singleStatus{}
 	for _, dName := range list {
-		stt := GetCurrentStatus(dName)
+		stt := GetCurrentStatus(dName, caller)
 		singleStt := singleStatus{
 			DomainName: dName,
 			Status:     stt,
@@ -68,7 +67,7 @@ func GetJoinedBid() []singleStatus {
 // get the next state of bidding session
 // XXX note commit price status + if time is expired and not commited yet
 // status clear
-func GetCurrentStatus(domainName string) string {
+func GetCurrentStatus(domainName string, caller string) string {
 	// if there is record in joinedBid -> user joined
 	// check for tine.Now() and startTime
 	now := time.Now().UnixMilli()
@@ -76,12 +75,11 @@ func GetCurrentStatus(domainName string) string {
 	if owner != "" {
 		return "owned by " + owner.String()
 	}
-	caller := std.GetOrigCaller()
 	// find the record
 	data, existed := bidStorage.Get(domainName)
 	if !existed {
 		// no record in bidRec yet -> not commited -> check if user started auction or not - if yes: new auction
-		if _, existedInRegister := joinedBid.Get(caller.String()); existedInRegister {
+		if _, existedInRegister := joinedBid.Get(caller); existedInRegister {
 			return "new auction"
 		}
 		return "domain name is free"
@@ -119,7 +117,6 @@ func Render(path string) string {
 // commit the domain name and computed hash string
 func CommitHash(domainName, hashString string) string {
 	caller := std.GetOrigCaller()
-	ufmt.Println("caller: ", caller.String())
 
 	// use now as int64 representation of time.Now()
 	now := time.Now().UnixMilli()
@@ -135,8 +132,8 @@ func CommitHash(domainName, hashString string) string {
 		var bidRec bidRecord
 		endCommitTime := now + defaultCommitHashTime.Milliseconds()
 		endPriceTime := endCommitTime + defaultCommitPriceTime.Milliseconds()
-		ufmt.Println("endCommitTime: ", time.UnixMilli(endCommitTime))
-		ufmt.Println("endPriceTime: ", time.UnixMilli(endPriceTime))
+		ufmt.Println("[HASH]: endCommitTime: ", time.UnixMilli(endCommitTime))
+		ufmt.Println("[HASH]: endPriceTime: ", time.UnixMilli(endPriceTime))
 		bidRec = bidRecord{
 			DomainName:    domainName,
 			Bidder:        caller,
@@ -159,11 +156,13 @@ func CommitHash(domainName, hashString string) string {
 	oldEndCommitTimeUnix := bidRecList[0].EndCommitTime
 	oldEndPriceTimeUnix := bidRecList[0].EndPriceTime
 	if now > oldEndCommitTimeUnix {
-		panic("can not commit hash anymore")
+		// now := time.Now().UnixMilli()
+		// ufmt.Println("[HASH]: now: ", time.UnixMilli(now))
+		panic("[HASH]: can not commit hash anymore")
 	}
 	for _, bR := range bidRecList {
 		if bR.Bidder == caller {
-			panic("you already commited hash")
+			panic("[HASH]: you already commited hash")
 		}
 	}
 
@@ -192,25 +191,25 @@ func CommitPrice(price int, secret string, domainName string) string {
 	now := time.Now().UnixMilli()
 	joinedString := secret + strconv.Itoa(price)
 	computedHashString := Get256String(joinedString)
-	ufmt.Println("computed hash: ", computedHashString)
+	ufmt.Println("[PRICE]: computed hash : ", computedHashString, "domain ", domainName)
 	caller := std.GetOrigCaller()
 	data, existed := bidStorage.Get(domainName)
 	if !existed {
-		panic(" domain name is invalid")
+		panic("[PRICE]: domain name is invalid")
 	}
 	bidRecList := data.([]bidRecord)
 	winnerRec.Set(domainName, bidRecList[0])
 
-	ufmt.Println("time now: ", time.UnixMilli(now))
-	ufmt.Println("end commit price time: ", time.UnixMilli(bidRecList[0].EndCommitTime))
+	ufmt.Println("[PRICE]: time now: ", time.UnixMilli(now))
+	ufmt.Println("[PRICE]: endPriceTime: ", time.UnixMilli(bidRecList[0].EndPriceTime))
 	// case commit after end - consider panic or not
 	if now > bidRecList[0].EndPriceTime {
-		ufmt.Println("commit price phase is ended")
+		ufmt.Println("[PRICE]: commit price phase is ended")
 		return "ended"
 	}
 	// case commit when price phase not started
 	if now <= bidRecList[0].EndCommitTime {
-		ufmt.Println("commit price phase is not started yet")
+		ufmt.Println("[PRICE]: commit price phase is not started yet")
 		return "not started yet"
 	}
 
@@ -218,14 +217,14 @@ func CommitPrice(price int, secret string, domainName string) string {
 	for _, bidRec := range bidRecList {
 		// panic because wrong price or wrong secret string
 		if bidRec.Bidder == caller && bidRec.HashString != computedHashString {
-			panic("invalid hash string")
+			panic("[PRICE]: invalid hash string")
 		}
 		// found it, update the winner price
 		if bidRec.Bidder == caller && bidRec.HashString == computedHashString {
 			data, _ := winnerRec.Get(domainName)
 			currentWinnerRec := data.(bidRecord)
 			if price > currentWinnerRec.Price && now < currentWinnerRec.EndPriceTime {
-				ufmt.Println("found new winner, setting up")
+				ufmt.Println("[PRICE]: found new winner, setting up")
 				currentWinnerRec.Price = price
 				currentWinnerRec.Bidder = bidRec.Bidder
 				currentWinnerRec.HashString = bidRec.HashString
@@ -238,7 +237,7 @@ func CommitPrice(price int, secret string, domainName string) string {
 		}
 	}
 	// if not match above case, then panic
-	panic("commit failed")
+	panic("commit price failed")
 }
 
 func GetCurrentWinner(domainName string) bidRecord {
@@ -406,7 +405,7 @@ func chargeFee(amount int64, from std.Address) {
 	coinsToTransfer := std.NewCoins(ugnotCoin)
 	coins := checkCoin(from)
 	ufmt.Println("check balances: ", coins)
-	ufmt.Println("send from contract ", bankerContract.String(), " to admin ", admin.String(), " amount: ", ugnotCoin)
+	// ufmt.Println("send from contract ", bankerContract.String(), " to admin ", admin.String(), " amount: ", ugnotCoin)
 	bankerUser.SendCoins(bankerContract, admin, coinsToTransfer)
 }
 

@@ -12,7 +12,7 @@ import (
 	"std"
 	"time"
 
-	"gno.land/p/varmeta/demo/v36/domain"
+	"gno.land/p/varmeta/demo/v37/domain"
 )
 
 // XXX: consider using panic instead of return string or errors
