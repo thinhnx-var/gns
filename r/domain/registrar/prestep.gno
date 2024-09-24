@@ -4,7 +4,7 @@ import (
 	"std"
 
 	"gno.land/p/demo/avl"
-	"gno.land/p/varmeta/demo/v35/domain"
+	"gno.land/p/varmeta/demo/v36/domain"
 )
 
 var (
@@ -22,7 +22,7 @@ var (
 
 func init() {
 	domainStorage = avl.NewTree()
-	BidRec = avl.NewTree()
+	bidStorage = avl.NewTree()
 	winnerRec = avl.NewTree()
 	rootRegistry = domain.NewDomainRegistry("Varmeta", "vmt")
 

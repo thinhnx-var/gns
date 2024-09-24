@@ -11,7 +11,7 @@ package resolver
 import (
 	"std"
 
-	"gno.land/r/varmeta/demo/v35/domain/registrar"
+	"gno.land/r/varmeta/demo/v36/domain/registrar"
 )
 
 type Record struct {

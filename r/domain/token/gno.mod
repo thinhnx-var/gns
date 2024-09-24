@@ -1,4 +1,4 @@
-module gno.land/r/demo/domain/vmt
+module gno.land/r/varmeta/demo1/domain/vmt
 
 require (
 	gno.land/p/demo/grc/grc20 v0.0.0-latest
