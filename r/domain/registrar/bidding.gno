@@ -132,6 +132,7 @@ func CommitHash(domainName, hashString string) string {
 		var bidRec bidRecord
 		endCommitTime := now + defaultCommitHashTime.Milliseconds()
 		endPriceTime := endCommitTime + defaultCommitPriceTime.Milliseconds()
+		ufmt.Println("[HASH]: request at: ", time.UnixMilli(now))
 		ufmt.Println("[HASH]: endCommitTime: ", time.UnixMilli(endCommitTime))
 		ufmt.Println("[HASH]: endPriceTime: ", time.UnixMilli(endPriceTime))
 		bidRec = bidRecord{
@@ -189,6 +190,7 @@ func CommitPrice(price int, secret string, domainName string) string {
 	// compute the hash string, compare to saved hash string in record
 	// use int64 representation of time.Now()
 	now := time.Now().UnixMilli()
+	ufmt.Println("[HASH]: request at: ", time.UnixMilli(now))
 	joinedString := secret + strconv.Itoa(price)
 	computedHashString := Get256String(joinedString)
 	ufmt.Println("[PRICE]: computed hash : ", computedHashString, "domain ", domainName)
@@ -307,70 +309,6 @@ func EndBid(domainName string) error {
 	findTheWinner(domainName)
 	return nil
 }
-
-// register new domain with bidding process inside - if message is commit hash -> dapp need to call commit hash
-// func RegisterDomain(domainName string) bidStatus {
-// 	reqInfo := RequestInfo{
-// 		WantedDomain: domainName,
-// 		Caller:       std.PrevRealm().Addr(),
-// 		Mode:         "native",
-// 	}
-
-// 	// bidStatus
-// 	result := checkRegisterState(reqInfo)
-// 	recordJoinedBid(domainName)
-// 	// if checkState get the message of which phase this domain name belongs to, then return the status
-// 	return result
-// }
-
-// func checkRegisterState(req RequestInfo) bidStatus {
-// 	var bStt bidStatus
-// 	// check if domain name is regex valid
-// 	if !isValidDomain(req.WantedDomain) {
-// 		panic("invalid domain name")
-// 	}
-// 	// check if dName is registered
-// 	if AlreadyRegistered(req.WantedDomain) {
-// 		panic("domain name already registered")
-// 	}
-// 	// changelogs v2: we are using sealed bidding now
-// 	// check if a bidding session is openning -> append new commit hash into record list
-// 	// both existed or not we open new bidding session
-// 	// for now we return a signal for dapps / service to know what to do next
-// 	isExisted, isOpen := checkBiddingState(req.WantedDomain)
-// 	if isExisted && isOpen {
-// 		// return commit hash signal for dapps
-// 		bStt.CurrentStatus = AppendBiddingSession
-// 		bStt.ActionCode = CommitHashPhase
-// 		return bStt
-// 	}
-
-// 	// create new session
-// 	if !isExisted {
-// 		bStt.CurrentStatus = NewBiddingSession
-// 		bStt.ActionCode = CommitHashPhase
-// 		return bStt
-// 	}
-
-// 	// not found in register repository but also not found in Bidding Record -> panic("error somewhere :D")
-// 	panic(ufmt.Errorf("should not happend"))
-// 	return bStt
-// }
-
-// // open a bidding session
-// func openBiddingSession(domainName string, dur time.Duration) string {
-// 	now := time.Now()
-// 	bidRec := bidRecord{
-// 		DomainName: domainName,
-// 		StartTime:  now,
-// 	}
-// 	bidRecList := []bidRecord{bidRec}
-// 	ok := bidStorage.Set(domainName, bidRecList)
-// 	if !ok {
-// 		panic("can not open bidding session")
-// 	}
-// 	return "created bidding session"
-// }
 
 func checkBiddingState(dName string) (isExisted bool, isOpen bool) {
 	data, existed := bidStorage.Get(dName)
