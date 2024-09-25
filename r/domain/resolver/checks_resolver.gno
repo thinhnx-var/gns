@@ -7,7 +7,7 @@ import (
 	"regexp"
 	"time"
 
-	"gno.land/r/varmeta/demo/v37/domain/registrar"
+	"gno.land/r/varmeta/demo/v39/domain/registrar"
 )
 
 // const (
