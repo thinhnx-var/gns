@@ -20,3 +20,15 @@ type bidRecord struct {
 	IsCommittedPrice bool
 	// CurrentPhase  actionCode
 }
+type bidRecV2 struct {
+	DomainName      string
+	Bidder          string
+	HashString      string
+	Price           int64
+	StartTime       int64
+	EndCommitTime   int64
+	EndPriceTime    int64
+	IsCommitedPrice bool
+	IsCommitedHash  bool
+	IsWinner        bool
+}
