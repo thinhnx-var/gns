@@ -4,7 +4,7 @@ import (
 	"std"
 
 	"gno.land/p/demo/avl"
-	"gno.land/p/varmeta/demo/v4/domain"
+	"gno.land/p/varmeta/demo/v405/domain"
 )
 
 var (
