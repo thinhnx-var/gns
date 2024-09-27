@@ -58,12 +58,13 @@ func GetJoinedBid(caller string) []bidStatus {
 		// get the time stamp in [0] element and assign it to status
 		data, _ := bidStorages.Get(dName)
 		bidRec := data.([]bidRecV2)[0]
-
+		activeCount := getActiveCount(dName)
 		singleStt := bidStatus{
 			DomainName:    dName,
 			Status:        stt,
 			EndCommitTime: bidRec.EndCommitTime,
 			EndPriceTime:  bidRec.EndPriceTime,
+			ActiveUsers:   activeCount,
 		}
 		listStatus = append(listStatus, singleStt)
 	}
@@ -305,7 +306,7 @@ func CommitPrice(price int64, secret string, domainName string) string {
 				bidStorages.Set(domainName, newList)
 				return "claim"
 			}
-			// if not the winner, update record 
+			// if not the winner, update record
 			if price <= currentWinnerRec.Price && now <= currentWinnerRec.EndPriceTime {
 				updatedRec := bidRecV2{
 					DomainName:       domainName,
@@ -423,4 +424,11 @@ func GetWinnerPrice(dName string) int64 {
 	rec := GetCurrentWinner(dName)
 	baseRegisterFee := GetRegisterFee(dName)
 	return rec.Price + baseRegisterFee
+}
+
+// get current active bidders
+func getActiveCount(dName string) int64 {
+	data, _ := bidStorages.Get(dName)
+	recList := data.([]bidRecV2)
+	return int64(len(recList))
 }

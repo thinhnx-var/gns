@@ -7,6 +7,7 @@ type bidStatus struct {
 	Status        string
 	EndCommitTime int64
 	EndPriceTime  int64
+	ActiveUsers   int64
 }
 
 type bidRecord struct {
