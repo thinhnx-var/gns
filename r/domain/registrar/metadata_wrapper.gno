@@ -7,7 +7,7 @@ import (
 
 	"gno.land/p/demo/ufmt"
 
-	"gno.land/p/varmeta/demo/v406/domain"
+	"gno.land/p/varmeta/demo/v5/domain"
 )
 
 // Metadata wrapper
