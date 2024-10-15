@@ -11,8 +11,8 @@ package sbidrealm
 
 // 	"gno.land/p/demo/avl"
 // 	"gno.land/p/demo/ufmt"
-// 	"gno.land/p/varmeta/demo/sbib"
-// 	"gno.land/r/varmeta/demo/v5/domain/registrar"
+// 	"gno.land/p/varmeta/demo/v7/sbid"
+// 	"gno.land/r/varmeta/demo/v7/domain/registrar"
 // )
 
 // func Render(path string) string {

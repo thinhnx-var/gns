@@ -10,31 +10,27 @@ import (
 	"time"
 
 	"gno.land/p/demo/avl"
-	"gno.land/p/demo/ufmt"
-	"gno.land/p/varmeta/demo/sbib"
+	sbid "gno.land/p/varmeta/demo/v7/sbid"
 )
 
 func Render(path string) string {
 	return "Welcome to varmeta realm bidding"
 }
 
-var (
-	root     *avl.Tree // domainName <- *sbid.Bid{BidInfo}
-	infoTree *avl.Tree // caller <- sbid.BidInfo
-)
+var root *avl.Tree // domainName <- *sbid.Bid{BidInfo}
 
 func init() {
 	root = avl.NewTree()
-	infoTree = avl.NewTree()
 }
 
 func newBid(domainName string) *sbid.Bid {
+	// initial timestamp for bid session
 	now := time.Now().UnixMilli()
-	endHashTime := time.Now().Add(30 * time.Second).UnixMilli()
-	endPriceTime := time.Now().Add(60 * time.Second).UnixMilli()
+	endHashTime := time.Now().Add(defaultCommitHashTime).UnixMilli()
+	endPriceTime := time.Now().Add(defaultCommitHashTime + defaultCommitPriceTime).UnixMilli()
 
 	bid := &sbid.Bid{
-		Infos:        infoTree,
+		Infos:        avl.NewTree(),
 		StartTime:    now,
 		EndHashTime:  endHashTime,
 		EndPriceTime: endPriceTime,
@@ -46,27 +42,43 @@ func newBid(domainName string) *sbid.Bid {
 // getBid returns the existed pointer to bid session in root. if there isnt, it will create new bid session
 func getBid(domainName string) *sbid.Bid {
 	var bid *sbid.Bid
-	data, existed := root.Get(domainName)
-	if !existed {
-		ufmt.Println("create new bid")
-		bid = newBid(domainName)
-	}
-	if existed {
-		ufmt.Println("existed")
-		bid = data.(*sbid.Bid)
-	}
+	data, _ := root.Get(domainName)
+	bid = data.(*sbid.Bid)
 	return bid
 }
 
+func isBidExisted(dName string) bool {
+	return root.Has(dName)
+}
+
 func CommitHash(domainName string, hashString string) string {
-	bid := getBid(domainName)
+	var bid *sbid.Bid
+	if isBidExisted(domainName) {
+		bid = getBid(domainName)
+	} else {
+		bid = newBid(domainName)
+	}
 	caller := std.GetOrigCaller().String()
 	// commit hash will also update info tree of the bid session
-	return bid.CommitHash(domainName, hashString, caller)
+	result := bid.CommitHash(domainName, hashString, caller)
+	if result == "committed hash" {
+		chargeFee(fee.BidJoinFee, std.Address(caller))
+	}
+	return result
+}
+
+func GetTimeNow() int64 {
+	return time.Now().UnixMilli()
 }
 
 func CommitPrice(domainName string, price int64, secret string) string {
-	bid := getBid(domainName)
+	var bid *sbid.Bid
+	if isBidExisted(domainName) {
+		bid = getBid(domainName)
+	} else {
+		// follow the logic: if you commit price without committed hash
+		return "you did not committed the hash"
+	}
 	caller := std.GetOrigCaller().String()
 	return bid.CommitPrice(domainName, price, secret, caller)
 }
@@ -88,15 +100,23 @@ func findStatusInRoot(caller string) []sbid.BidStatus {
 	return listStt
 }
 
-func GetCurrentStatus(dName string) string {
+func GetCurrentStatus(dName string, caller string) string {
 	owner := GetOwner(dName)
 	if owner != "" {
 		return "owned by " + owner.String()
 	}
-	bid := getBid(dName)
-	caller := std.GetOrigCaller().String()
+	// TODO: this getBid func will create new bid session if there is no bid existed
+	// -> fix it please -> separate getBid logic (DONE)
+	var bid *sbid.Bid
+	if !isBidExisted(dName) {
+		return "domain name is free"
+	} else {
+		bid = getBid(dName)
+	}
 	status := bid.GetStatus(dName, caller)
+	// checking this for dapps purpose
 	if status.Status == "free" {
+		// this caller is not joining bidding session
 		return "domain name is free"
 	}
 	// Auction closed with winner
@@ -109,9 +129,14 @@ func GetCurrentStatus(dName string) string {
 }
 
 func GetCurrentWinner(dName string) string {
-	bid := getBid(dName)
+	var bid *sbid.Bid
+	if isBidExisted(dName) {
+		bid = getBid(dName)
+	} else {
+		return "no session for this domain yet"
+	}
 	winner := bid.GetCurrentWinnerInfo()
-	if winner.Bidder == "" {
+	if !winner.IsWinner {
 		return "no winner yet"
 	}
 	return winner.Bidder
@@ -125,7 +150,12 @@ func Claim(dName string) string {
 	if !root.Has(dName) {
 		panic("invalid domain name")
 	}
-	bid := getBid(dName)
+	var bid *sbid.Bid
+	if isBidExisted(dName) {
+		bid = getBid(dName)
+	} else {
+		bid = newBid(dName)
+	}
 	caller := std.GetOrigCaller()
 	winner := bid.GetCurrentWinnerInfo()
 	if caller.String() != winner.Bidder {
@@ -140,12 +170,19 @@ func Claim(dName string) string {
 	if !result.Success {
 		panic("bad register")
 	}
+	chargeFee(winner.Price, caller)
+	feeProcess(requestInfo)
 	return "claimed"
 }
 
 // // expose winner price - amount of fee that user need to pay in Claim phase
 func GetWinnerPrice(dName string) int64 {
-	bid := getBid(dName)
+	var bid *sbid.Bid
+	if isBidExisted(dName) {
+		bid = getBid(dName)
+	} else {
+		bid = newBid(dName)
+	}
 
 	baseRegisterFee := GetRegisterFee(dName)
 	winner := bid.GetCurrentWinnerInfo()
@@ -156,8 +193,7 @@ func chargeFee(amount int64, from std.Address) string {
 	bankerContract := std.CurrentRealm().Addr()
 	ugnotCoin := std.NewCoin("ugnot", amount)
 	coinsToTransfer := std.NewCoins(ugnotCoin)
-	coins := checkCoin(from)
-	ufmt.Println("check balances: ", coins)
+	// coins := checkCoin(from)
 	// ufmt.Println("send from contract ", bankerContract.String(), " to admin ", admin.String(), " amount: ", ugnotCoin)
 	bankerUser.SendCoins(bankerContract, admin, coinsToTransfer)
 	return "charged"

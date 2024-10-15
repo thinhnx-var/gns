@@ -12,7 +12,7 @@ import (
 	"std"
 	"time"
 
-	"gno.land/p/varmeta/demo/v5/domain"
+	"gno.land/p/varmeta/demo/v7/domain"
 )
 
 // XXX: consider using panic instead of return string or errors
@@ -72,7 +72,7 @@ func executeRegister(req RequestInfo) ExecuteResult {
 
 func feeProcess(req RequestInfo) {
 	if req.Mode == "token" {
-		tokenProcess(req.WantedDomain, req.Caller)
+		nativeProcess()
 	} else {
 		nativeProcess()
 	}
