@@ -8,7 +8,7 @@ package registrar
 import (
 	"std"
 	"time"
-
+	"gno.land/p/demo/ufmt"
 	"gno.land/p/demo/avl"
 	sbid "gno.land/p/varmeta/demo/v7/sbid"
 )
@@ -52,6 +52,8 @@ func isBidExisted(dName string) bool {
 }
 
 func CommitHash(domainName string, hashString string) string {
+	now := time.Now()
+	ufmt.Println("commit hash at: ", now)
 	var bid *sbid.Bid
 	if isBidExisted(domainName) {
 		bid = getBid(domainName)
@@ -72,6 +74,8 @@ func GetTimeNow() int64 {
 }
 
 func CommitPrice(domainName string, price int64, secret string) string {
+	now := time.Now()
+	ufmt.Println("commit price at: ", now)
 	var bid *sbid.Bid
 	if isBidExisted(domainName) {
 		bid = getBid(domainName)
