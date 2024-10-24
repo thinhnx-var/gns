@@ -111,7 +111,6 @@ func GetCurrentStatus(dName string, caller string) string {
 	if owner != "" {
 		return "owned by " + owner.String()
 	}
-	// TODO: this getBid func will create new bid session if there is no bid existed
 	// -> fix it please -> separate getBid logic (DONE)
 	var bid *sbid.Bid
 	if !isBidExisted(dName) {
