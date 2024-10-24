@@ -199,8 +199,6 @@ func chargeFee(amount int64, from std.Address) string {
 	bankerContract := std.CurrentRealm().Addr()
 	ugnotCoin := std.NewCoin("ugnot", amount)
 	coinsToTransfer := std.NewCoins(ugnotCoin)
-	// coins := checkCoin(from)
-	// ufmt.Println("send from contract ", bankerContract.String(), " to admin ", admin.String(), " amount: ", ugnotCoin)
 	bankerUser.SendCoins(bankerContract, admin, coinsToTransfer)
 	return "charged"
 }
