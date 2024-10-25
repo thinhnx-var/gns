@@ -8,8 +8,9 @@ package registrar
 import (
 	"std"
 	"time"
-	"gno.land/p/demo/ufmt"
+
 	"gno.land/p/demo/avl"
+	"gno.land/p/demo/ufmt"
 	sbid "gno.land/p/varmeta/demo/v7/sbid"
 )
 
@@ -25,16 +26,17 @@ func init() {
 
 func newBid(domainName string) *sbid.Bid {
 	// initial timestamp for bid session
-	now := time.Now().UnixMilli()
-	endHashTime := time.Now().Add(defaultCommitHashTime).UnixMilli()
-	endPriceTime := time.Now().Add(defaultCommitHashTime + defaultCommitPriceTime).UnixMilli()
-
+	now := time.Now()
+	endHashTime := now.Add(defaultCommitHashTime)
+	endPriceTime := now.Add(defaultCommitHashTime + defaultCommitPriceTime)
+	ufmt.Println("new bid on: ", now, " endHash: ", endHashTime)
 	bid := &sbid.Bid{
 		Infos:        avl.NewTree(),
-		StartTime:    now,
-		EndHashTime:  endHashTime,
-		EndPriceTime: endPriceTime,
+		StartTime:    now.UnixMilli(),
+		EndHashTime:  endHashTime.UnixMilli(),
+		EndPriceTime: endPriceTime.UnixMilli(),
 	}
+	ufmt.Println("value now saved: ", now.UnixMilli())
 	root.Set(domainName, bid)
 	return bid
 }
